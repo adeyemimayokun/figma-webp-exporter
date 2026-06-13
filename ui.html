@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WebP Exporter</title>
+  <style>
+    /* Use Figma's native CSS variables for seamless light/dark mode support */
+    :root {
+      --bg: var(--figma-color-bg, #ffffff);
+      --text: var(--figma-color-text, #333333);
+      --border: var(--figma-color-border, #e5e5e5);
+      --brand: var(--figma-color-bg-brand, #0d99ff);
+      --brand-hover: var(--figma-color-bg-brand-hover, #007be5);
+      --onbrand: var(--figma-color-text-onbrand, #ffffff);
+      --danger: var(--figma-color-text-danger, #f24822);
+      --success: var(--figma-color-text-success, #14a800);
+    }
+
+    body {
+      margin: 0;
+      padding: 20px;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      font-size: 13px;
+    }
+
+    h2 {
+      font-size: 14px;
+      margin-top: 0;
+      margin-bottom: 8px;
+      font-weight: 600;
+    }
+
+    .description {
+      opacity: 0.7;
+      font-size: 12px;
+      margin-bottom: 24px;
+      line-height: 1.4;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    label {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      font-weight: 500;
+    }
+
+    select {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background-color: var(--bg);
+      color: var(--text);
+      font-size: 13px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    select:focus {
+      border-color: var(--brand);
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--brand);
+      cursor: pointer;
+    }
+
+    input[type="range"]:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .checkbox-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      font-weight: 500;
+    }
+
+    .checkbox-row input[type="checkbox"] {
+      width: 14px;
+      height: 14px;
+      margin: 0;
+      accent-color: var(--brand);
+      cursor: pointer;
+    }
+
+    .hint {
+      margin: 6px 0 0 22px;
+      font-size: 11px;
+      opacity: 0.6;
+      line-height: 1.35;
+    }
+
+    .quality-group.is-disabled label {
+      opacity: 0.55;
+    }
+
+    .preview-visual {
+      display: none;
+      margin-bottom: 12px;
+    }
+
+    .preview-visual.is-visible {
+      display: block;
+    }
+
+    .preview-visual-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 8px;
+      font-size: 11px;
+      font-weight: 500;
+      opacity: 0.75;
+    }
+
+    .comparison {
+      position: relative;
+      width: 100%;
+      height: 160px;
+      overflow: hidden;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background:
+        linear-gradient(45deg, var(--figma-color-bg-secondary, rgba(0, 0, 0, 0.04)) 25%, transparent 25%),
+        linear-gradient(-45deg, var(--figma-color-bg-secondary, rgba(0, 0, 0, 0.04)) 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, var(--figma-color-bg-secondary, rgba(0, 0, 0, 0.04)) 75%),
+        linear-gradient(-45deg, transparent 75%, var(--figma-color-bg-secondary, rgba(0, 0, 0, 0.04)) 75%);
+      background-size: 12px 12px;
+      background-position: 0 0, 0 6px, 6px -6px, -6px 0;
+      user-select: none;
+      touch-action: none;
+    }
+
+    .comparison img {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      pointer-events: none;
+    }
+
+    .comparison-before {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 50%;
+      height: 100%;
+      overflow: hidden;
+      border-right: 2px solid var(--brand);
+      z-index: 2;
+    }
+
+    .comparison-before img {
+      max-width: none;
+    }
+
+    .comparison-handle {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: var(--brand);
+      border: 2px solid var(--onbrand);
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+      z-index: 3;
+      pointer-events: none;
+    }
+
+    .comparison-range {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      opacity: 0;
+      cursor: ew-resize;
+      z-index: 4;
+    }
+
+    .comparison-labels {
+      position: absolute;
+      bottom: 6px;
+      left: 0;
+      right: 0;
+      display: flex;
+      justify-content: space-between;
+      padding: 0 8px;
+      z-index: 3;
+      pointer-events: none;
+    }
+
+    .comparison-labels span {
+      font-size: 10px;
+      font-weight: 600;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: rgba(0, 0, 0, 0.55);
+      color: #fff;
+    }
+
+    button {
+      width: 100%;
+      padding: 10px;
+      background-color: var(--brand);
+      color: var(--onbrand);
+      border: none;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 13px;
+      cursor: pointer;
+      transition: background-color 0.2s;
+      margin-top: 8px;
+    }
+
+    button:hover:not(:disabled) {
+      background-color: var(--brand-hover);
+    }
+
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    #status {
+      margin-top: 16px;
+      text-align: center;
+      font-size: 12px;
+      font-weight: 500;
+      min-height: 15px;
+    }
+
+    .error { color: var(--danger); }
+    .success { color: var(--success); }
+
+    .preview-capsule {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 8px 14px;
+      margin-bottom: 8px;
+      border-radius: 999px;
+      background-color: var(--figma-color-bg-secondary, rgba(0, 0, 0, 0.04));
+      border: 1px solid var(--border);
+      font-size: 11px;
+      font-weight: 500;
+      line-height: 1.3;
+      min-height: 18px;
+      text-align: center;
+    }
+
+    .preview-capsule.is-loading {
+      opacity: 0.65;
+    }
+
+    .preview-capsule.is-empty {
+      opacity: 0.55;
+    }
+
+    .preview-arrow {
+      opacity: 0.45;
+    }
+
+    #preview-label {
+      font-variant-numeric: tabular-nums;
+    }
+  </style>
+</head>
+<body>
+
+  <h2>WebP Exporter</h2>
+  <p class="description">Select up to 8 layers on your canvas, adjust your settings, and export as WebP. Multiple layers download as a single ZIP.</p>
+
+  <div class="form-group">
+    <label for="scale">Size</label>
+    <select id="scale">
+      <option value="0.5">0.5x</option>
+      <option value="1" selected>1x</option>
+      <option value="1.5">1.5x</option>
+      <option value="2">2x</option>
+      <option value="3">3x</option>
+      <option value="4">4x</option>
+    </select>
+  </div>
+
+  <div class="form-group quality-group" id="quality-group">
+    <label for="quality">Quality <span id="quality-val">80%</span></label>
+    <input type="range" id="quality" min="1" max="100" value="80">
+  </div>
+
+  <div class="form-group">
+    <label class="checkbox-row" for="lossless">
+      <input type="checkbox" id="lossless">
+      <span>Lossless WebP</span>
+    </label>
+    <p class="hint">Preserves every pixel; typically larger files than lossy.</p>
+  </div>
+
+  <div id="preview-visual" class="preview-visual" aria-hidden="true">
+    <div class="preview-visual-header">
+      <span>Before / after</span>
+      <span id="preview-layer-name"></span>
+    </div>
+    <div class="comparison" id="comparison">
+      <img id="preview-after" alt="WebP preview">
+      <div class="comparison-before" id="comparison-before">
+        <img id="preview-before" alt="Original preview">
+      </div>
+      <div class="comparison-handle" id="comparison-handle"></div>
+      <input type="range" class="comparison-range" id="comparison-range" min="0" max="100" value="50" aria-label="Drag to compare original and WebP">
+      <div class="comparison-labels">
+        <span>Original</span>
+        <span>WebP</span>
+      </div>
+    </div>
+  </div>
+
+  <div id="preview-capsule" class="preview-capsule is-empty" aria-live="polite">
+    <span id="preview-label">Select layers to preview</span>
+  </div>
+
+  <button id="export-btn">Export as WebP</button>
+  <div id="status"></div>
+
+  <script>
+    const exportBtn = document.getElementById('export-btn');
+    const qualitySlider = document.getElementById('quality');
+    const qualityVal = document.getElementById('quality-val');
+    const qualityGroup = document.getElementById('quality-group');
+    const losslessCheckbox = document.getElementById('lossless');
+    const scaleSelect = document.getElementById('scale');
+    const statusDiv = document.getElementById('status');
+    const previewCapsule = document.getElementById('preview-capsule');
+    const previewLabel = document.getElementById('preview-label');
+    const previewVisual = document.getElementById('preview-visual');
+    const previewLayerName = document.getElementById('preview-layer-name');
+    const previewBefore = document.getElementById('preview-before');
+    const previewAfter = document.getElementById('preview-after');
+    const comparisonBefore = document.getElementById('comparison-before');
+    const comparisonHandle = document.getElementById('comparison-handle');
+    const comparisonRange = document.getElementById('comparison-range');
+    const comparison = document.getElementById('comparison');
+
+    let previewRequestId = 0;
+    let previewTimer = null;
+    let activePreviewRequestId = 0;
+    let previewObjectUrls = [];
+
+    function getSettings() {
+      const lossless = losslessCheckbox.checked;
+      return {
+        scale: parseFloat(scaleSelect.value),
+        quality: lossless ? 1 : parseInt(qualitySlider.value, 10) / 100,
+        lossless
+      };
+    }
+
+    function syncQualityControls() {
+      const lossless = losslessCheckbox.checked;
+      qualitySlider.disabled = lossless;
+      qualityGroup.classList.toggle('is-disabled', lossless);
+      qualityVal.textContent = lossless ? 'Lossless' : qualitySlider.value + '%';
+    }
+
+    function revokePreviewUrls() {
+      for (const url of previewObjectUrls) {
+        URL.revokeObjectURL(url);
+      }
+      previewObjectUrls = [];
+    }
+
+    function hideVisualPreview() {
+      previewVisual.classList.remove('is-visible');
+      previewVisual.setAttribute('aria-hidden', 'true');
+      previewBefore.removeAttribute('src');
+      previewAfter.removeAttribute('src');
+      revokePreviewUrls();
+    }
+
+    function setComparisonPosition(percent) {
+      const clamped = Math.max(0, Math.min(100, percent));
+      comparisonBefore.style.width = clamped + '%';
+      comparisonHandle.style.left = clamped + '%';
+      comparisonRange.value = String(clamped);
+    }
+
+    function syncComparisonImageWidth() {
+      const width = comparison.clientWidth;
+      previewBefore.style.width = width + 'px';
+    }
+
+    function showVisualPreview(pngBytes, webpBlob, layerName, layerCount) {
+      revokePreviewUrls();
+
+      const pngUrl = URL.createObjectURL(new Blob([pngBytes], { type: 'image/png' }));
+      const webpUrl = URL.createObjectURL(webpBlob);
+      previewObjectUrls.push(pngUrl, webpUrl);
+
+      previewBefore.src = pngUrl;
+      previewAfter.src = webpUrl;
+
+      previewBefore.onload = syncComparisonImageWidth;
+      previewAfter.onload = syncComparisonImageWidth;
+      syncComparisonImageWidth();
+
+      const suffix = layerCount > 1 ? ` (+${layerCount - 1} more)` : '';
+      previewLayerName.textContent = layerName + suffix;
+      previewVisual.classList.add('is-visible');
+      previewVisual.setAttribute('aria-hidden', 'false');
+      setComparisonPosition(parseInt(comparisonRange.value, 10) || 50);
+    }
+
+    function formatFileSize(bytes) {
+      if (bytes < 1024) {
+        return bytes + ' B';
+      }
+      if (bytes < 1024 * 1024) {
+        return (bytes / 1024).toFixed(bytes < 10240 ? 1 : 0) + ' KB';
+      }
+      return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+
+    function setPreviewEmpty(message) {
+      previewCapsule.classList.remove('is-loading');
+      previewCapsule.classList.add('is-empty');
+      previewLabel.textContent = message;
+      hideVisualPreview();
+    }
+
+    function setPreviewLoading() {
+      previewCapsule.classList.remove('is-empty');
+      previewCapsule.classList.add('is-loading');
+      previewLabel.textContent = 'Calculating preview…';
+      hideVisualPreview();
+    }
+
+    function schedulePreview() {
+      clearTimeout(previewTimer);
+      previewTimer = setTimeout(requestPreview, 350);
+    }
+
+    function requestPreview() {
+      const requestId = ++previewRequestId;
+      activePreviewRequestId = requestId;
+      setPreviewLoading();
+
+      parent.postMessage({ pluginMessage: {
+        type: 'preview',
+        settings: getSettings()
+      } }, '*');
+    }
+
+    async function updatePreviewFromData(msg, requestId) {
+      if (requestId !== activePreviewRequestId) {
+        return;
+      }
+      const images = msg.images;
+      const quality = msg.quality;
+      const lossless = msg.lossless === true;
+      let pngTotal = 0;
+      let webpTotal = 0;
+      let firstWebpBlob = null;
+
+      for (let i = 0; i < images.length; i++) {
+        const imgData = images[i];
+        if (requestId !== activePreviewRequestId) {
+          return;
+        }
+
+        pngTotal += imgData.bytes.length;
+        try {
+          const webpBlob = await convertToWebP(imgData.bytes, quality, lossless);
+          webpTotal += webpBlob.size;
+          if (i === 0) {
+            firstWebpBlob = webpBlob;
+          }
+        } catch (err) {
+          console.error('Preview conversion failed for', imgData.name, err);
+        }
+      }
+
+      if (requestId !== activePreviewRequestId) {
+        return;
+      }
+
+      previewCapsule.classList.remove('is-loading', 'is-empty');
+      const modeLabel = lossless ? ' · Lossless' : ' · ' + Math.round(quality * 100) + '%';
+      previewLabel.innerHTML =
+        formatFileSize(pngTotal) +
+        ' <span class="preview-arrow" aria-hidden="true">→</span> ' +
+        formatFileSize(webpTotal) +
+        '<span style="opacity:0.6">' + modeLabel + '</span>';
+
+      if (firstWebpBlob && images.length > 0) {
+        showVisualPreview(images[0].bytes, firstWebpBlob, images[0].name, images.length);
+      } else {
+        hideVisualPreview();
+      }
+    }
+
+    // Update the visual quality percentage label
+    qualitySlider.addEventListener('input', (e) => {
+      qualityVal.textContent = e.target.value + '%';
+      schedulePreview();
+    });
+
+    losslessCheckbox.addEventListener('change', () => {
+      syncQualityControls();
+      schedulePreview();
+    });
+
+    scaleSelect.addEventListener('change', schedulePreview);
+
+    comparisonRange.addEventListener('input', (e) => {
+      setComparisonPosition(parseInt(e.target.value, 10));
+    });
+
+    window.addEventListener('resize', () => {
+      if (previewVisual.classList.contains('is-visible')) {
+        syncComparisonImageWidth();
+      }
+    });
+
+    syncQualityControls();
+    schedulePreview();
+
+    // Trigger the export logic when clicked
+    exportBtn.onclick = () => {
+      statusDiv.textContent = 'Processing request...';
+      statusDiv.className = '';
+      exportBtn.disabled = true;
+
+      // Send the settings back to Figma canvas
+      parent.postMessage({ pluginMessage: {
+        type: 'export',
+        settings: getSettings()
+      } }, '*');
+    };
+
+    // Listen for incoming messages from the Figma main thread
+    onmessage = async (event) => {
+      const msg = event.data.pluginMessage;
+
+      if (msg.type === 'selection-changed') {
+        schedulePreview();
+      }
+
+      if (msg.type === 'preview-empty') {
+        if (previewRequestId === activePreviewRequestId) {
+          setPreviewEmpty(msg.message || 'Select layers to preview');
+        }
+      }
+
+      if (msg.type === 'preview-data') {
+        await updatePreviewFromData(msg, activePreviewRequestId);
+      }
+
+      if (msg.type === 'status') {
+        statusDiv.textContent = msg.message;
+      }
+
+      if (msg.type === 'error') {
+        statusDiv.textContent = msg.message;
+        statusDiv.className = 'error';
+        exportBtn.disabled = false;
+      }
+
+      // Handle the image data conversion
+      if (msg.type === 'export-data') {
+        statusDiv.textContent = 'Converting to WebP...';
+
+        const images = msg.images;
+        const quality = msg.quality;
+        const lossless = msg.lossless === true;
+        const webpFiles = [];
+
+        for (let i = 0; i < images.length; i++) {
+          const imgData = images[i];
+          try {
+            const webpBlob = await convertToWebP(imgData.bytes, quality, lossless);
+            const webpBytes = new Uint8Array(await webpBlob.arrayBuffer());
+            webpFiles.push({
+              name: makeUniqueFilename(imgData.name, webpFiles.map((f) => f.name)),
+              data: webpBytes
+            });
+          } catch (err) {
+            console.error('Conversion failed for', imgData.name, err);
+          }
+        }
+
+        if (webpFiles.length === 0) {
+          statusDiv.textContent = 'Failed to convert any layers to WebP.';
+          statusDiv.className = 'error';
+          exportBtn.disabled = false;
+          return;
+        }
+
+        // Browsers block multiple programmatic downloads after async work.
+        // Bundle multiple files into one ZIP so every export is delivered.
+        if (webpFiles.length === 1) {
+          triggerDownload(new Blob([webpFiles[0].data], { type: 'image/webp' }), webpFiles[0].name);
+        } else {
+          const zipBlob = createZipArchive(webpFiles);
+          triggerDownload(zipBlob, 'webp-export');
+        }
+
+        statusDiv.textContent = `Successfully exported ${webpFiles.length} file(s)!`;
+        statusDiv.className = 'success';
+        exportBtn.disabled = false;
+      }
+    };
+
+    // Core Canvas Conversion Logic
+    async function convertToWebP(uint8Array, quality, lossless) {
+      // 1. Create a blob from the PNG bytes provided by Figma
+      const blob = new Blob([uint8Array], { type: 'image/png' });
+      const url = URL.createObjectURL(blob);
+
+      // 2. Load it into an Image object
+      const img = new Image();
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
+        img.src = url;
+      });
+
+      // 3. Draw onto a hidden canvas (maintaining dimensions and alpha transparency)
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+
+      // Cleanup
+      URL.revokeObjectURL(url);
+
+      // 4. Extract as WebP Blob — quality 1.0 triggers lossless encoding in Chromium
+      const effectiveQuality = lossless ? 1 : quality;
+
+      return new Promise((resolve, reject) => {
+        canvas.toBlob((webpBlob) => {
+          if (webpBlob) {
+            resolve(webpBlob);
+          } else {
+            reject(new Error('Canvas toBlob failed'));
+          }
+        }, 'image/webp', effectiveQuality);
+      });
+    }
+
+    function sanitizeFilename(filename) {
+      return filename.replace(/[/\\?%*:|"<>]/g, '-').trim() || 'export';
+    }
+
+    function makeUniqueFilename(name, existingNames) {
+      const base = sanitizeFilename(name);
+      if (!existingNames.includes(base)) {
+        return base;
+      }
+
+      let index = 2;
+      while (existingNames.includes(`${base}-${index}`)) {
+        index += 1;
+      }
+      return `${base}-${index}`;
+    }
+
+    // Helper to trigger the browser download
+    function triggerDownload(blob, filename) {
+      const safeFilename = sanitizeFilename(filename);
+      const extension = blob.type === 'application/zip' ? '.zip' : '.webp';
+
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = safeFilename + extension;
+
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+    }
+
+    function createZipArchive(files) {
+      const encoder = new TextEncoder();
+      const parts = [];
+      const centralDirectory = [];
+      let offset = 0;
+
+      for (const file of files) {
+        const nameBytes = encoder.encode(file.name + '.webp');
+        const data = file.data;
+        const crc = crc32(data);
+
+        const localHeader = new Uint8Array(30 + nameBytes.length);
+        const localView = new DataView(localHeader.buffer);
+        localView.setUint32(0, 0x04034b50, true);
+        localView.setUint16(4, 20, true);
+        localView.setUint16(8, 0, true);
+        localView.setUint32(14, crc, true);
+        localView.setUint32(18, data.length, true);
+        localView.setUint32(22, data.length, true);
+        localView.setUint16(26, nameBytes.length, true);
+        localHeader.set(nameBytes, 30);
+
+        parts.push(localHeader, data);
+
+        const centralEntry = new Uint8Array(46 + nameBytes.length);
+        const centralView = new DataView(centralEntry.buffer);
+        centralView.setUint32(0, 0x02014b50, true);
+        centralView.setUint16(4, 20, true);
+        centralView.setUint16(6, 20, true);
+        centralView.setUint16(8, 0, true);
+        centralView.setUint16(10, 0, true);
+        centralView.setUint32(16, crc, true);
+        centralView.setUint32(20, data.length, true);
+        centralView.setUint32(24, data.length, true);
+        centralView.setUint16(28, nameBytes.length, true);
+        centralView.setUint32(42, offset, true);
+        centralEntry.set(nameBytes, 46);
+        centralDirectory.push(centralEntry);
+
+        offset += localHeader.length + data.length;
+      }
+
+      const centralBytes = concatUint8Arrays(centralDirectory);
+      const endRecord = new Uint8Array(22);
+      const endView = new DataView(endRecord.buffer);
+      endView.setUint32(0, 0x06054b50, true);
+      endView.setUint16(8, files.length, true);
+      endView.setUint16(10, files.length, true);
+      endView.setUint32(12, centralBytes.length, true);
+      endView.setUint32(16, offset, true);
+
+      return new Blob([...parts, centralBytes, endRecord], { type: 'application/zip' });
+    }
+
+    function concatUint8Arrays(chunks) {
+      const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+      const result = new Uint8Array(totalLength);
+      let position = 0;
+
+      for (const chunk of chunks) {
+        result.set(chunk, position);
+        position += chunk.length;
+      }
+
+      return result;
+    }
+
+    function crc32(data) {
+      let crc = 0xffffffff;
+      const table = getCrc32Table();
+
+      for (let i = 0; i < data.length; i++) {
+        crc = (crc >>> 8) ^ table[(crc ^ data[i]) & 0xff];
+      }
+
+      return (crc ^ 0xffffffff) >>> 0;
+    }
+
+    let crc32Table;
+    function getCrc32Table() {
+      if (crc32Table) {
+        return crc32Table;
+      }
+
+      crc32Table = new Uint32Array(256);
+      for (let i = 0; i < 256; i++) {
+        let c = i;
+        for (let j = 0; j < 8; j++) {
+          c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
+        }
+        crc32Table[i] = c >>> 0;
+      }
+      return crc32Table;
+    }
+  </script>
+</body>
+</html>
